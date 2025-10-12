@@ -1,11 +1,11 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import {
   McpActivityTool,
   McpWorkflow,
   WorkflowSessionManager,
-} from '../src/index.js';
+} from "../src/index.js";
 
 /**
  * Example: Advanced workflow with conditional steps, retries, and error handling
@@ -25,14 +25,14 @@ const sessionManager = new WorkflowSessionManager({
 
 // Create an MCP server
 const server = new McpServer({
-  name: 'advanced-workflow-server',
-  version: '1.0.0',
+  name: "advanced-workflow-server",
+  version: "1.0.0",
 });
 
 // Activity 1: Fetch data (with retry and timeout)
 const fetchDataActivity = new McpActivityTool(
-  'fetch_data',
-  'Fetches data from a source with retry logic',
+  "fetch_data",
+  "Fetches data from a source with retry logic",
   {
     inputSchema: {
       source: z.string(),
@@ -52,7 +52,7 @@ const fetchDataActivity = new McpActivityTool(
         if (simulateFailure) {
           return {
             success: false,
-            error: 'Simulated network failure',
+            error: "Simulated network failure",
           };
         }
 
@@ -84,12 +84,12 @@ const fetchDataActivity = new McpActivityTool(
 
 // Activity 2: Transform data
 const transformDataActivity = new McpActivityTool(
-  'transform_data',
-  'Transforms the fetched data',
+  "transform_data",
+  "Transforms the fetched data",
   {
     inputSchema: {
       data: z.array(z.number()),
-      operation: z.enum(['double', 'square', 'increment']),
+      operation: z.enum(["double", "square", "increment"]),
     },
     outputSchema: {
       transformed: z.array(z.number()),
@@ -101,13 +101,13 @@ const transformDataActivity = new McpActivityTool(
 
         let transformed: number[];
         switch (operation) {
-          case 'double':
+          case "double":
             transformed = data.map((n) => n * 2);
             break;
-          case 'square':
+          case "square":
             transformed = data.map((n) => n * n);
             break;
-          case 'increment':
+          case "increment":
             transformed = data.map((n) => n + 1);
             break;
         }
@@ -128,8 +128,8 @@ const transformDataActivity = new McpActivityTool(
 
 // Activity 3: Validate data (optional step)
 const validateDataActivity = new McpActivityTool(
-  'validate_data',
-  'Validates the transformed data',
+  "validate_data",
+  "Validates the transformed data",
   {
     inputSchema: {
       data: z.array(z.number()),
@@ -164,8 +164,8 @@ const validateDataActivity = new McpActivityTool(
 
 // Activity 4: Aggregate data
 const aggregateDataActivity = new McpActivityTool(
-  'aggregate_data',
-  'Computes aggregate statistics on the data',
+  "aggregate_data",
+  "Computes aggregate statistics on the data",
   {
     inputSchema: {
       data: z.array(z.number()),
@@ -205,8 +205,8 @@ const aggregateDataActivity = new McpActivityTool(
 
 // Activity 5: Generate report
 const generateReportActivity = new McpActivityTool(
-  'generate_report',
-  'Generates a final report',
+  "generate_report",
+  "Generates a final report",
   {
     inputSchema: {
       stats: z.object({
@@ -259,8 +259,8 @@ Processing Steps: ${context.metadata.currentStep + 1}/${
 // ============================================
 
 const dataProcessingWorkflow = new McpWorkflow(
-  'data_processing',
-  'Fetches, transforms, validates, and aggregates data with conditional execution',
+  "data_processing",
+  "Fetches, transforms, validates, and aggregates data with conditional execution",
   {
     steps: [
       {
@@ -277,7 +277,7 @@ const dataProcessingWorkflow = new McpWorkflow(
         activity: aggregateDataActivity,
         // Only run this step if validation passed or was skipped
         condition: async (memory) => {
-          const validationResult = memory.get('validate_data');
+          const validationResult = memory.get("validate_data");
           if (!validationResult) return true; // Validation was skipped
           return validationResult.valid === true;
         },
@@ -291,9 +291,9 @@ const dataProcessingWorkflow = new McpWorkflow(
       console.log(`\n[WORKFLOW] ✓ Completed successfully!`);
       console.log(`[WORKFLOW] Session ID: ${sessionId}`);
 
-      const report = memory.get('generate_report');
+      const report = memory.get("generate_report");
       if (report?.report) {
-        console.log('\n' + report.report);
+        console.log("\n" + report.report);
       }
     },
     onFailure: async (error, sessionId) => {
@@ -304,7 +304,7 @@ const dataProcessingWorkflow = new McpWorkflow(
       console.log(`\n[WORKFLOW] Final status: ${status}`);
 
       // Get session stats
-      const stats = sessionManager.getStats();
+      const stats = await sessionManager.getStats();
       console.log(`[WORKFLOW] Active sessions: ${stats.total}`);
     },
   },
@@ -322,27 +322,29 @@ const dataProcessingWorkflow = new McpWorkflow(
 // - data_processing_start: Starts a new workflow execution (uses first activity's input schema)
 // - data_processing_continue: Continues an existing workflow session
 dataProcessingWorkflow.attachToServer(server, {
-  startToolTitle: 'Start Data Processing Workflow',
-  continueToolTitle: 'Continue Data Processing Workflow',
+  startToolTitle: "Start Data Processing Workflow",
+  continueToolTitle: "Continue Data Processing Workflow",
   // Don't register individual activities as standalone tools in this example
   registerActivities: false,
 });
 
 // Add a tool to check workflow status
 server.tool(
-  'workflow_status',
-  'Check the status of a workflow session',
+  "workflow_status",
+  "Check the status of a workflow session",
   {
     sessionId: z.string(),
   },
   async (args) => {
-    const session = dataProcessingWorkflow.getSessionStatus(args.sessionId);
+    const session = await dataProcessingWorkflow.getSessionStatus(
+      args.sessionId
+    );
 
     if (!session) {
       return {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: `Session ${args.sessionId} not found`,
           },
         ],
@@ -353,7 +355,7 @@ server.tool(
     return {
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(
             {
               sessionId: session.sessionId,
@@ -376,15 +378,15 @@ server.tool(
 
 // Add a tool to get session manager stats
 server.tool(
-  'workflow_stats',
-  'Get statistics about all workflow sessions',
+  "workflow_stats",
+  "Get statistics about all workflow sessions",
   async () => {
     const stats = sessionManager.getStats();
 
     return {
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(stats, null, 2),
         },
       ],
@@ -399,10 +401,10 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('Advanced Workflow MCP Server running on stdio');
+  console.error("Advanced Workflow MCP Server running on stdio");
 }
 
 main().catch((error) => {
-  console.error('Fatal error in main():', error);
+  console.error("Fatal error in main():", error);
   process.exit(1);
 });

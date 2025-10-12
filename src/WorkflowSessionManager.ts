@@ -25,13 +25,12 @@ export class WorkflowSessionManager {
   /**
    * Creates a new workflow session
    */
-  createSession(workflowName: string, totalSteps: number): WorkflowSession {
-    // Clean up old sessions if we're at the limit (async cleanup)
-    this.store.getStats().then((stats) => {
-      if (stats.total >= this.maxSessions) {
-        this.cleanup();
-      }
-    });
+  async createSession(workflowName: string, totalSteps: number): Promise<WorkflowSession> {
+    // Clean up old sessions if we're at the limit
+    const stats = await this.store.getStats();
+    if (stats.total >= this.maxSessions) {
+      await this.cleanup();
+    }
 
     const sessionId = randomUUID();
     const session: WorkflowSession = {
@@ -46,54 +45,45 @@ export class WorkflowSessionManager {
       branchHistory: [],
     };
 
-    // Create session in store (fire and forget for sync compatibility)
-    this.store.createSession(session);
-    return session;
+    // Create session in store
+    return this.store.createSession(session);
   }
 
   /**
    * Gets a session by ID
    */
-  getSession(sessionId: string): WorkflowSession | undefined {
-    // For sync compatibility, we need to handle async store
-    // In practice, this will work because createSession is called before getSession
-    let result: WorkflowSession | undefined;
-    this.store.getSession(sessionId).then((session) => {
-      result = session;
-    });
-    // This is a temporary sync wrapper - ideally the whole API should be async
-    return result;
+  async getSession(sessionId: string): Promise<WorkflowSession | undefined> {
+    return this.store.getSession(sessionId);
   }
 
   /**
    * Updates a session
    */
-  updateSession(sessionId: string, updates: Partial<WorkflowSession>): void {
-    this.store.updateSession(sessionId, updates);
+  async updateSession(
+    sessionId: string,
+    updates: Partial<WorkflowSession>
+  ): Promise<void> {
+    await this.store.updateSession(sessionId, updates);
   }
 
   /**
    * Stores a value in the session memory
    */
-  setMemory(sessionId: string, key: string, value: any): void {
-    this.store.setMemory(sessionId, key, value);
+  async setMemory(sessionId: string, key: string, value: any): Promise<void> {
+    await this.store.setMemory(sessionId, key, value);
   }
 
   /**
    * Gets a value from the session memory
    */
-  getMemory(sessionId: string, key: string): any {
-    let result: any;
-    this.store.getMemory(sessionId, key).then((value) => {
-      result = value;
-    });
-    return result;
+  async getMemory(sessionId: string, key: string): Promise<any> {
+    return this.store.getMemory(sessionId, key);
   }
 
   /**
    * Records a step execution in the session history
    */
-  recordStepExecution(
+  async recordStepExecution(
     sessionId: string,
     stepIndex: number,
     activityName: string,
@@ -101,8 +91,8 @@ export class WorkflowSessionManager {
     completedAt: Date,
     success: boolean,
     error?: string
-  ): void {
-    this.store.recordStepExecution(
+  ): Promise<void> {
+    await this.store.recordStepExecution(
       sessionId,
       stepIndex,
       activityName,
@@ -116,13 +106,13 @@ export class WorkflowSessionManager {
   /**
    * Records a branch decision in the session history
    */
-  recordBranchDecision(
+  async recordBranchDecision(
     sessionId: string,
     stepIndex: number,
     branchPattern: string | undefined,
     toolName: string
-  ): void {
-    this.store.recordBranchDecision(
+  ): Promise<void> {
+    await this.store.recordBranchDecision(
       sessionId,
       stepIndex,
       branchPattern,
@@ -133,12 +123,12 @@ export class WorkflowSessionManager {
   /**
    * Marks a session as completed
    */
-  completeSession(
+  async completeSession(
     sessionId: string,
     status: WorkflowStatus,
     error?: string
-  ): void {
-    this.store.updateSession(sessionId, {
+  ): Promise<void> {
+    await this.store.updateSession(sessionId, {
       status,
       completedAt: new Date(),
       error,
@@ -148,15 +138,15 @@ export class WorkflowSessionManager {
   /**
    * Deletes a session
    */
-  deleteSession(sessionId: string): void {
-    this.store.deleteSession(sessionId);
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.store.deleteSession(sessionId);
   }
 
   /**
    * Cleans up old or completed sessions
    */
-  cleanup(): void {
-    this.store.cleanup({
+  async cleanup(): Promise<void> {
+    await this.store.cleanup({
       maxAge: this.sessionTTLMs,
       maxSessions: this.maxSessions,
       statuses: [
@@ -179,35 +169,30 @@ export class WorkflowSessionManager {
   /**
    * Gets statistics about sessions
    */
-  getStats(): {
+  async getStats(): Promise<{
     total: number;
     byStatus: Record<WorkflowStatus, number>;
     byWorkflow: Record<string, number>;
-  } {
-    // For backwards compatibility, return a basic structure
-    // Actual data is fetched async
-    const stats = {
-      total: 0,
+  }> {
+    const storeStats = await this.store.getStats();
+    const sessions = await this.store.listSessions();
+
+    const byWorkflow: Record<string, number> = {};
+    for (const session of sessions) {
+      byWorkflow[session.workflowName] = (byWorkflow[session.workflowName] || 0) + 1;
+    }
+
+    return {
+      total: storeStats.total,
       byStatus: {
-        [WorkflowStatus.PENDING]: 0,
-        [WorkflowStatus.RUNNING]: 0,
-        [WorkflowStatus.COMPLETED]: 0,
-        [WorkflowStatus.FAILED]: 0,
-        [WorkflowStatus.CANCELLED]: 0,
+        [WorkflowStatus.PENDING]: storeStats.pending,
+        [WorkflowStatus.RUNNING]: storeStats.running,
+        [WorkflowStatus.COMPLETED]: storeStats.completed,
+        [WorkflowStatus.FAILED]: storeStats.failed,
+        [WorkflowStatus.CANCELLED]: storeStats.cancelled,
       },
-      byWorkflow: {} as Record<string, number>,
+      byWorkflow,
     };
-
-    this.store.getStats().then((storeStats) => {
-      stats.total = storeStats.total;
-      stats.byStatus[WorkflowStatus.PENDING] = storeStats.pending;
-      stats.byStatus[WorkflowStatus.RUNNING] = storeStats.running;
-      stats.byStatus[WorkflowStatus.COMPLETED] = storeStats.completed;
-      stats.byStatus[WorkflowStatus.FAILED] = storeStats.failed;
-      stats.byStatus[WorkflowStatus.CANCELLED] = storeStats.cancelled;
-    });
-
-    return stats;
   }
 
   /**

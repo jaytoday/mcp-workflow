@@ -1,6 +1,6 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { z, ZodRawShape } from 'zod';
-import type { McpActivityTool } from './McpActivityTool.js';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z, ZodRawShape } from "zod";
+import type { McpActivityTool } from "./McpActivityTool.js";
 
 /**
  * The execution context passed to activity callbacks
@@ -41,8 +41,11 @@ export interface ToolCallSuggestion {
  * The result returned from an activity execution
  */
 export interface ActivityResult<TOutput = any> {
-  /** Whether the activity succeeded */
-  success: boolean;
+  /**
+   * Whether the activity succeeded.
+   * If not provided, it will be considered `true` unless an error is thrown.
+   */
+  success?: boolean;
   /** The output data from the activity */
   data?: TOutput;
   /** Error message if the activity failed */
@@ -60,11 +63,20 @@ export interface ActivityCallbacks<TInput = any, TOutput = any> {
   /** Main execution function for the activity */
   run: (context: ActivityContext<TInput>) => Promise<ActivityResult<TOutput>>;
   /** Called when the activity succeeds */
-  onSuccess?: (result: ActivityResult<TOutput>, context: ActivityContext<TInput>) => Promise<void> | void;
+  onSuccess?: (
+    result: ActivityResult<TOutput>,
+    context: ActivityContext<TInput>
+  ) => Promise<void> | void;
   /** Called when the activity fails */
-  onFailure?: (result: ActivityResult<TOutput>, context: ActivityContext<TInput>) => Promise<void> | void;
+  onFailure?: (
+    result: ActivityResult<TOutput>,
+    context: ActivityContext<TInput>
+  ) => Promise<void> | void;
   /** Called when the activity completes (success or failure) */
-  onComplete?: (result: ActivityResult<TOutput>, context: ActivityContext<TInput>) => Promise<void> | void;
+  onComplete?: (
+    result: ActivityResult<TOutput>,
+    context: ActivityContext<TInput>
+  ) => Promise<void> | void;
 }
 
 /**
@@ -96,23 +108,11 @@ export interface ActivityConfig<
  * Status of a workflow execution
  */
 export enum WorkflowStatus {
-  PENDING = 'pending',
-  RUNNING = 'running',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
-}
-
-/**
- * Branch definition for conditional workflow paths
- */
-export interface BranchDefinition {
-  /** Name of the tool to call for this branch */
-  toolName: string;
-  /** Whether to continue the main workflow after this branch */
-  continueWorkflow?: boolean;
-  /** Optional parameters to merge with branch call */
-  parameters?: Record<string, any>;
+  PENDING = "pending",
+  RUNNING = "running",
+  COMPLETED = "completed",
+  FAILED = "failed",
+  CANCELLED = "cancelled",
 }
 
 /**
@@ -124,7 +124,11 @@ export interface BranchConfig {
   /** Name of the tool to call if condition matches */
   call: string;
   /** Optional function to compute parameters for the tool call */
-  with?: (result: any, input: any, memory: Map<string, any>) => Record<string, any>;
+  with?: (
+    result: any,
+    input: any,
+    memory: Map<string, any>
+  ) => Record<string, any>;
   /** Human-readable description of this branch */
   description?: string;
 }
@@ -139,11 +143,10 @@ export interface WorkflowStep {
   optional?: boolean;
   /** Condition to determine if this step should run */
   condition?: (memory: Map<string, any>) => boolean | Promise<boolean>;
-  /** Branch definitions based on activity result patterns (legacy pattern-matching syntax) */
-  branches?: {
-    /** Map result patterns (e.g., "status:approved", "error:true") to branch tools */
-    [pattern: string]: BranchDefinition;
-  } | BranchConfig[];
+  /** Branch definitions based on activity result patterns */
+  branches?: BranchConfig[];
+  /** Optional function to map input data for the activity */
+  inputMapper?: (data: any, memory: Map<string, any>) => any;
 }
 
 /**
@@ -155,11 +158,17 @@ export interface WorkflowConfig {
   /** Maximum time for the entire workflow in milliseconds */
   timeout?: number;
   /** Called when the workflow completes successfully */
-  onSuccess?: (memory: Map<string, any>, sessionId: string) => Promise<void> | void;
+  onSuccess?: (
+    memory: Map<string, any>,
+    sessionId: string
+  ) => Promise<void> | void;
   /** Called when the workflow fails */
   onFailure?: (error: Error, sessionId: string) => Promise<void> | void;
   /** Called when the workflow completes (success or failure) */
-  onComplete?: (status: WorkflowStatus, sessionId: string) => Promise<void> | void;
+  onComplete?: (
+    status: WorkflowStatus,
+    sessionId: string
+  ) => Promise<void> | void;
 }
 
 /**

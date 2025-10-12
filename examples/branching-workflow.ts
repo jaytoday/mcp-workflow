@@ -1,11 +1,11 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import {
   McpActivityTool,
   McpWorkflow,
   WorkflowSessionManager,
-} from '../src/index.js';
+} from "../src/index.js";
 
 /**
  * Example: Branching workflow with conditional paths
@@ -25,8 +25,8 @@ const sessionManager = new WorkflowSessionManager({
 
 // Create an MCP server
 const server = new McpServer({
-  name: 'branching-workflow-server',
-  version: '1.0.0',
+  name: "branching-workflow-server",
+  version: "1.0.0",
 });
 
 // ============================================
@@ -35,8 +35,8 @@ const server = new McpServer({
 
 // Activity 1: Validate Input
 const validateActivity = new McpActivityTool(
-  'validate_input',
-  'Validates the input data',
+  "validate_input",
+  "Validates the input data",
   {
     inputSchema: {
       email: z.string(),
@@ -54,12 +54,12 @@ const validateActivity = new McpActivityTool(
         const errors: string[] = [];
 
         // Validation logic
-        if (!email.includes('@')) {
-          errors.push('Invalid email format');
+        if (!email.includes("@")) {
+          errors.push("Invalid email format");
         }
 
         if (age < 18) {
-          errors.push('User must be 18 or older');
+          errors.push("User must be 18 or older");
         }
 
         const valid = errors.length === 0;
@@ -85,8 +85,8 @@ const validateActivity = new McpActivityTool(
 
 // Activity 2: Process Registration
 const processRegistrationActivity = new McpActivityTool(
-  'process_registration',
-  'Processes the user registration',
+  "process_registration",
+  "Processes the user registration",
   {
     inputSchema: {
       email: z.string(),
@@ -109,7 +109,7 @@ const processRegistrationActivity = new McpActivityTool(
           success: true,
           data: {
             userId,
-            status: 'registered',
+            status: "registered",
           },
         };
       },
@@ -119,8 +119,8 @@ const processRegistrationActivity = new McpActivityTool(
 
 // Activity 3: Send Notification
 const sendNotificationActivity = new McpActivityTool(
-  'send_notification',
-  'Sends a notification to the user',
+  "send_notification",
+  "Sends a notification to the user",
   {
     inputSchema: {
       userId: z.string(),
@@ -138,7 +138,7 @@ const sendNotificationActivity = new McpActivityTool(
 
         console.log(
           `[NOTIFY] Sent notification ${notificationId} to ${userId}: ${
-            message || 'Welcome!'
+            message || "Welcome!"
           }`
         );
 
@@ -159,8 +159,8 @@ const sendNotificationActivity = new McpActivityTool(
 // ============================================
 
 const errorCorrectionActivity = new McpActivityTool(
-  'correct_errors',
-  'Attempts to auto-correct validation errors',
+  "correct_errors",
+  "Attempts to auto-correct validation errors",
   {
     inputSchema: {
       errors: z.array(z.string()),
@@ -180,7 +180,7 @@ const errorCorrectionActivity = new McpActivityTool(
         const remainingErrors: string[] = [];
 
         for (const error of errors) {
-          if (error.includes('email')) {
+          if (error.includes("email")) {
             // Can't auto-fix email
             remainingErrors.push(error);
           }
@@ -211,8 +211,8 @@ const errorCorrectionActivity = new McpActivityTool(
 // ============================================
 
 const requestApprovalActivity = new McpActivityTool(
-  'request_approval',
-  'Requests approval from a manager',
+  "request_approval",
+  "Requests approval from a manager",
   {
     inputSchema: {
       data: z.any(),
@@ -220,7 +220,7 @@ const requestApprovalActivity = new McpActivityTool(
     },
     outputSchema: {
       approvalId: z.string(),
-      status: z.enum(['pending', 'approved', 'rejected']),
+      status: z.enum(["pending", "approved", "rejected"]),
     },
     callbacks: {
       run: async (context) => {
@@ -236,7 +236,7 @@ const requestApprovalActivity = new McpActivityTool(
           success: true,
           data: {
             approvalId,
-            status: 'approved' as const, // In a real system, this would be pending until approved
+            status: "approved" as const, // In a real system, this would be pending until approved
           },
         };
       },
@@ -249,8 +249,8 @@ const requestApprovalActivity = new McpActivityTool(
 // ============================================
 
 const userRegistrationWorkflow = new McpWorkflow(
-  'user_registration',
-  'Registers a user with validation and conditional branching',
+  "user_registration",
+  "Registers a user with validation and conditional branching",
   {
     steps: [
       {
@@ -258,26 +258,26 @@ const userRegistrationWorkflow = new McpWorkflow(
         branches: [
           {
             when: (result) => result.valid && result.requiresApproval,
-            call: 'approval_workflow_start',
+            call: "approval_workflow_start",
             with: (_result, input) => ({
               data: input,
-              reason: 'Amount exceeds $10,000',
+              reason: "Amount exceeds $10,000",
             }),
-            description: 'Requires manager approval',
+            description: "Requires manager approval",
           },
           {
             when: (result) => result.valid && !result.requiresApproval,
-            call: 'user_registration_continue',
-            description: 'Continue registration',
+            call: "user_registration_continue",
+            description: "Continue registration",
           },
           {
             when: (result) => !result.valid,
-            call: 'error_correction_start',
+            call: "error_correction_start",
             with: (result, input) => ({
               errors: result.errors,
               originalData: input,
             }),
-            description: 'Validation failed, attempt auto-correction',
+            description: "Validation failed, attempt auto-correction",
           },
         ],
       },
@@ -292,7 +292,7 @@ const userRegistrationWorkflow = new McpWorkflow(
       console.log(`\n[WORKFLOW] ✓ User Registration completed!`);
       console.log(`[WORKFLOW] Session ID: ${sessionId}`);
 
-      const result = memory.get('send_notification');
+      const result = memory.get("send_notification");
       if (result?.notificationId) {
         console.log(`[WORKFLOW] Notification sent: ${result.notificationId}`);
       }
@@ -310,8 +310,8 @@ const userRegistrationWorkflow = new McpWorkflow(
 // ============================================
 
 const errorCorrectionWorkflow = new McpWorkflow(
-  'error_correction',
-  'Attempts to auto-correct validation errors',
+  "error_correction",
+  "Attempts to auto-correct validation errors",
   {
     steps: [
       {
@@ -321,7 +321,7 @@ const errorCorrectionWorkflow = new McpWorkflow(
     onSuccess: async (memory, sessionId) => {
       console.log(`\n[ERROR_CORRECTION] ✓ Error correction completed!`);
 
-      const result = memory.get('correct_errors');
+      const result = memory.get("correct_errors");
       if (result?.corrected) {
         console.log(
           `[ERROR_CORRECTION] Errors corrected, can retry registration`
@@ -341,8 +341,8 @@ const errorCorrectionWorkflow = new McpWorkflow(
 // ============================================
 
 const approvalWorkflow = new McpWorkflow(
-  'approval_workflow',
-  'Handles approval requests',
+  "approval_workflow",
+  "Handles approval requests",
   {
     steps: [
       {
@@ -352,8 +352,8 @@ const approvalWorkflow = new McpWorkflow(
     onSuccess: async (memory, sessionId) => {
       console.log(`\n[APPROVAL] ✓ Approval workflow completed!`);
 
-      const result = memory.get('request_approval');
-      if (result?.status === 'approved') {
+      const result = memory.get("request_approval");
+      if (result?.status === "approved") {
         console.log(`[APPROVAL] Request approved, can continue registration`);
       }
     },
@@ -366,38 +366,38 @@ const approvalWorkflow = new McpWorkflow(
 // ============================================
 
 userRegistrationWorkflow.attachToServer(server, {
-  startToolTitle: 'Start User Registration',
-  continueToolTitle: 'Continue User Registration',
+  startToolTitle: "Start User Registration",
+  continueToolTitle: "Continue User Registration",
 });
 
 errorCorrectionWorkflow.attachToServer(server, {
-  startToolTitle: 'Start Error Correction',
-  continueToolTitle: 'Continue Error Correction',
+  startToolTitle: "Start Error Correction",
+  continueToolTitle: "Continue Error Correction",
 });
 
 approvalWorkflow.attachToServer(server, {
-  startToolTitle: 'Start Approval Workflow',
-  continueToolTitle: 'Continue Approval Workflow',
+  startToolTitle: "Start Approval Workflow",
+  continueToolTitle: "Continue Approval Workflow",
 });
 
 // Add a tool to check workflow status
 server.tool(
-  'workflow_status',
-  'Check the status of any workflow session',
+  "workflow_status",
+  "Check the status of any workflow session",
   {
     sessionId: z.string(),
   },
   async (args) => {
     const session =
-      userRegistrationWorkflow.getSessionStatus(args.sessionId) ||
-      errorCorrectionWorkflow.getSessionStatus(args.sessionId) ||
-      approvalWorkflow.getSessionStatus(args.sessionId);
+      (await userRegistrationWorkflow.getSessionStatus(args.sessionId)) ||
+      (await errorCorrectionWorkflow.getSessionStatus(args.sessionId)) ||
+      (await approvalWorkflow.getSessionStatus(args.sessionId));
 
     if (!session) {
       return {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: `Session ${args.sessionId} not found`,
           },
         ],
@@ -408,7 +408,7 @@ server.tool(
     return {
       content: [
         {
-          type: 'text',
+          type: "text",
           text: JSON.stringify(
             {
               sessionId: session.sessionId,
@@ -434,10 +434,10 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('Branching Workflow MCP Server running on stdio');
+  console.error("Branching Workflow MCP Server running on stdio");
 }
 
 main().catch((error) => {
-  console.error('Fatal error in main():', error);
+  console.error("Fatal error in main():", error);
   process.exit(1);
 });

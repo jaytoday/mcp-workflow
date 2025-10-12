@@ -1,7 +1,7 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import { McpActivityTool, McpWorkflow } from '../src/index.js';
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import { McpActivityTool, McpWorkflow } from "../src/index.js";
 
 /**
  * Example: Building a simple calculator workflow
@@ -14,8 +14,8 @@ import { McpActivityTool, McpWorkflow } from '../src/index.js';
 
 // Create an MCP server
 const server = new McpServer({
-  name: 'calculator-workflow-server',
-  version: '1.0.0',
+  name: "calculator-workflow-server",
+  version: "1.0.0",
 });
 
 // ============================================
@@ -23,7 +23,7 @@ const server = new McpServer({
 // ============================================
 
 // Activity 1: Add two numbers
-const addActivity = new McpActivityTool('add', 'Adds two numbers together', {
+const addActivity = new McpActivityTool("add", "Adds two numbers together", {
   inputSchema: {
     a: z.number(),
     b: z.number(),
@@ -39,7 +39,6 @@ const addActivity = new McpActivityTool('add', 'Adds two numbers together', {
       console.log(`[ADD] ${a} + ${b} = ${result}`);
 
       return {
-        success: true,
         data: { result },
       };
     },
@@ -51,12 +50,12 @@ const addActivity = new McpActivityTool('add', 'Adds two numbers together', {
 
 // Activity 2: Multiply by a factor
 const multiplyActivity = new McpActivityTool(
-  'multiply',
-  'Multiplies a number by a factor',
+  "multiply",
+  "Multiplies a number by a factor",
   {
     inputSchema: {
       value: z.number(),
-      factor: z.number(),
+      factor: z.number().default(2),
     },
     outputSchema: {
       result: z.number(),
@@ -69,7 +68,6 @@ const multiplyActivity = new McpActivityTool(
         console.log(`[MULTIPLY] ${value} * ${factor} = ${result}`);
 
         return {
-          success: true,
           data: { result },
         };
       },
@@ -79,8 +77,8 @@ const multiplyActivity = new McpActivityTool(
 
 // Activity 3: Format the result
 const formatActivity = new McpActivityTool(
-  'format',
-  'Formats the final result as a string',
+  "format",
+  "Formats the final result as a string",
   {
     inputSchema: {
       value: z.number(),
@@ -96,7 +94,6 @@ const formatActivity = new McpActivityTool(
         console.log(`[FORMAT] ${formatted}`);
 
         return {
-          success: true,
           data: { formatted },
         };
       },
@@ -109,8 +106,8 @@ const formatActivity = new McpActivityTool(
 // ============================================
 
 const calculatorWorkflow = new McpWorkflow(
-  'calculator',
-  'A workflow that adds two numbers, multiplies the result, and formats the output',
+  "calculator",
+  "A workflow that adds two numbers, multiplies the result, and formats the output",
   {
     steps: [
       {
@@ -144,8 +141,8 @@ const calculatorWorkflow = new McpWorkflow(
 // - calculator_start: Starts a new workflow execution (uses first activity's input schema)
 // - calculator_continue: Continues an existing workflow session
 calculatorWorkflow.attachToServer(server, {
-  startToolTitle: 'Start Calculator Workflow',
-  continueToolTitle: 'Continue Calculator Workflow',
+  startToolTitle: "Start Calculator Workflow",
+  continueToolTitle: "Continue Calculator Workflow",
   // Optionally register individual activities as standalone tools
   registerActivities: true,
 });
@@ -157,10 +154,10 @@ calculatorWorkflow.attachToServer(server, {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.log('Calculator Workflow MCP Server running on stdio');
+  console.log("Calculator Workflow MCP Server running on stdio");
 }
 
 main().catch((error) => {
-  console.error('Fatal error in main():', error);
+  console.error("Fatal error in main():", error);
   process.exit(1);
 });
