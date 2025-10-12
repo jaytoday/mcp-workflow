@@ -1,8 +1,8 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z, ZodRawShape } from 'zod';
-import { McpActivityTool } from './McpActivityTool.js';
-import { WorkflowSessionManager } from './WorkflowSessionManager.js';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ZodRawShape } from "zod";
+import { McpActivityTool } from "./McpActivityTool.js";
+import { WorkflowSessionManager } from "./WorkflowSessionManager.js";
 import {
   WorkflowConfig,
   WorkflowStatus,
@@ -11,7 +11,8 @@ import {
   WorkflowSession,
   ToolCallSuggestion,
   ActivityResult,
-} from './types.js';
+  WorkflowStep,
+} from "./types.js";
 
 /**
  * McpWorkflow orchestrates a sequence of McpActivityTool executions.
@@ -25,6 +26,7 @@ export class McpWorkflow {
   private readonly activities: Map<string, McpActivityTool> = new Map();
   private readonly sessionManager: WorkflowSessionManager;
   private registered: boolean = false;
+  private lastSessionId: string | null = null;
 
   constructor(
     name: string,
@@ -46,7 +48,7 @@ export class McpWorkflow {
    */
   private validateConfig(): void {
     if (!this.config.steps || this.config.steps.length === 0) {
-      throw new Error('Workflow must have at least one step');
+      throw new Error("Workflow must have at least one step");
     }
   }
 
@@ -151,22 +153,23 @@ export class McpWorkflow {
    */
   async start(input?: any): Promise<WorkflowToolResponse> {
     // Create a new session
-    const session = this.sessionManager.createSession(
+    const session = await this.sessionManager.createSession(
       this.name,
       this.config.steps.length
     );
+    this.lastSessionId = session.sessionId;
 
     // Store initial input if provided
     if (input) {
-      this.sessionManager.setMemory(
+      await this.sessionManager.setMemory(
         session.sessionId,
-        '__workflow_input__',
+        "__workflow_input__",
         input
       );
     }
 
     // Update status to running
-    this.sessionManager.updateSession(session.sessionId, {
+    await this.sessionManager.updateSession(session.sessionId, {
       status: WorkflowStatus.RUNNING,
     });
 
@@ -177,11 +180,13 @@ export class McpWorkflow {
   /**
    * Continues a workflow execution from a specific session
    */
-  async continue(
-    sessionId: string,
-    stepInput?: any
-  ): Promise<WorkflowToolResponse> {
-    const session = this.sessionManager.getSession(sessionId);
+  async continue(stepInput?: any): Promise<WorkflowToolResponse> {
+    const sessionId = this.lastSessionId;
+    if (!sessionId) {
+      throw new Error("No active workflow session to continue.");
+    }
+
+    const session = await this.sessionManager.getSession(sessionId);
     if (!session) {
       throw new Error(`Workflow session ${sessionId} not found`);
     }
@@ -203,41 +208,18 @@ export class McpWorkflow {
   }
 
   /**
-   * Evaluates branch patterns against activity result data
-   */
-  private matchBranchPattern(pattern: string, resultData: any): boolean {
-    // Pattern format: "key:value" or "key.nested:value"
-    const [path, expectedValue] = pattern.split(':');
-    if (!path || expectedValue === undefined) return false;
-
-    // Get the actual value from the result data
-    const pathParts = path.split('.');
-    let actualValue = resultData;
-    for (const part of pathParts) {
-      if (actualValue === undefined || actualValue === null) return false;
-      actualValue = actualValue[part];
-    }
-
-    // Compare values (handle booleans and strings)
-    const normalizedExpected = expectedValue.toLowerCase();
-    const normalizedActual = String(actualValue).toLowerCase();
-
-    return normalizedExpected === normalizedActual;
-  }
-
-  /**
    * Builds tool call suggestions from activity result and step configuration
    */
-  private buildToolCallSuggestions(
+  private async buildToolCallSuggestions(
     stepIndex: number,
     result: ActivityResult,
     sessionId: string,
     stepInput: any
-  ): ToolCallSuggestion[] {
+  ): Promise<ToolCallSuggestion[]> {
     const suggestions: ToolCallSuggestion[] = [];
     const step = this.config.steps[stepIndex];
     const isLastStep = stepIndex === this.config.steps.length - 1;
-    const session = this.sessionManager.getSession(sessionId);
+    const session = await this.sessionManager.getSession(sessionId);
     const memory = session?.memory || new Map();
 
     // First, add suggestions from the activity result itself
@@ -267,26 +249,6 @@ export class McpWorkflow {
             });
           }
         }
-      } else {
-        // Legacy pattern-matching syntax
-        for (const [pattern, branchDef] of Object.entries(step.branches)) {
-          if (this.matchBranchPattern(pattern, result.data)) {
-            suggestions.push({
-              toolName: branchDef.toolName,
-              parameters: {
-                sessionId,
-                ...(branchDef.parameters || {}),
-                ...result.data,
-              },
-              condition: `Branch condition: ${pattern}`,
-              priority: 100, // High priority for matched branch patterns
-              metadata: {
-                branchPattern: pattern,
-                continueWorkflow: branchDef.continueWorkflow,
-              },
-            });
-          }
-        }
       }
     }
 
@@ -300,10 +262,9 @@ export class McpWorkflow {
         suggestions.push({
           toolName: `${this.name}_continue`,
           parameters: {
-            sessionId,
             ...result.data,
           },
-          condition: 'Continue to next step in workflow',
+          condition: "Continue to next step in workflow",
           priority: 50, // Medium priority for default continuation
         });
       }
@@ -314,6 +275,19 @@ export class McpWorkflow {
   }
 
   /**
+   * Checks if a step should be skipped based on its condition
+   */
+  private async shouldSkipStep(
+    step: WorkflowStep,
+    session: WorkflowSession
+  ): Promise<boolean> {
+    if (step.condition) {
+      return !(await step.condition(session.memory));
+    }
+    return false;
+  }
+
+  /**
    * Executes a specific step in the workflow
    */
   private async executeStep(
@@ -321,7 +295,7 @@ export class McpWorkflow {
     stepIndex: number,
     stepInput?: any
   ): Promise<WorkflowToolResponse> {
-    const session = this.sessionManager.getSession(sessionId);
+    const session = await this.sessionManager.getSession(sessionId);
     if (!session) {
       throw new Error(`Workflow session ${sessionId} not found`);
     }
@@ -331,21 +305,14 @@ export class McpWorkflow {
       throw new Error(`Step ${stepIndex} not found in workflow`);
     }
 
-    // Update current step
-    this.sessionManager.updateSession(sessionId, {
+    await this.sessionManager.updateSession(sessionId, {
       currentStep: stepIndex,
     });
 
-    // Check if step should be skipped based on condition
-    if (step.condition) {
-      const shouldRun = await step.condition(session.memory);
-      if (!shouldRun) {
-        // Skip this step and move to the next
-        return this.continue(sessionId);
-      }
+    if (await this.shouldSkipStep(step, session)) {
+      return this.continue(sessionId);
     }
 
-    // Get the activity for this step
     const activity = step.activity;
     if (!activity) {
       const error = `Activity not found for step ${stepIndex}`;
@@ -354,150 +321,224 @@ export class McpWorkflow {
     }
 
     try {
-      // Prepare the activity context
-      // Use the stepInput provided by the MCP client, or empty object as fallback
-      const context: ActivityContext = {
-        input: stepInput || {},
-        sessionId,
-        memory: session.memory,
-        metadata: {
-          workflowName: this.name,
-          currentStep: stepIndex,
-          totalSteps: this.config.steps.length,
-          startedAt: session.startedAt,
-        },
-      };
+      const result = await this.runActivityForStep(
+        activity,
+        session,
+        stepIndex,
+        stepInput
+      );
 
-      const startedAt = new Date();
+      if (!result.success && !step.optional) {
+        return this.handleFailedStep(
+          sessionId,
+          stepIndex,
+          activity.name,
+          result.error
+        );
+      }
 
-      // Execute the activity
-      const result = await activity.execute(context);
-
-      const completedAt = new Date();
-
-      // Record the execution
-      this.sessionManager.recordStepExecution(
+      return this.handleSuccessfulStep(
         sessionId,
         stepIndex,
         activity.name,
-        startedAt,
-        completedAt,
-        result.success,
-        result.error
+        result,
+        stepInput
       );
-
-      // Store the result in memory
-      this.sessionManager.setMemory(sessionId, activity.name, result.data);
-
-      if (!result.success && !step.optional) {
-        // If step failed and is not optional, fail the workflow
-        await this.failWorkflow(
-          sessionId,
-          result.error || 'Activity failed without error message'
-        );
-
-        return {
-          toolResult: {
-            content: [
-              {
-                type: 'text',
-                text: `Workflow failed at step ${stepIndex} (${activity.name}): ${result.error}`,
-              },
-            ],
-            isError: true,
-          },
-          session: this.sessionManager.getSession(sessionId)!,
-        };
-      }
-
-      // Determine next action
-      const isLastStep = stepIndex === this.config.steps.length - 1;
-
-      if (isLastStep) {
-        // Complete the workflow
-        return this.completeWorkflow(sessionId);
-      } else {
-        // Build all possible next step suggestions (including branches)
-        const toolSuggestions = this.buildToolCallSuggestions(
-          stepIndex,
-          result,
-          sessionId,
-          stepInput
-        );
-
-        const nextStep = this.config.steps[stepIndex + 1];
-        const updatedSession = this.sessionManager.getSession(sessionId)!;
-
-        // Get the primary suggestion (highest priority)
-        const primarySuggestion = toolSuggestions[0];
-
-        return {
-          toolResult: {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  message: `Step ${stepIndex} (${activity.name}) completed successfully`,
-                  result: result.data,
-                  nextStep: {
-                    index: stepIndex + 1,
-                    activity: nextStep.activity.name,
-                  },
-                  progress: {
-                    current: stepIndex + 1,
-                    total: this.config.steps.length,
-                  },
-                  branchOptions:
-                    toolSuggestions.length > 1 ? toolSuggestions : undefined,
-                }),
-              },
-            ],
-            structuredContent: {
-              stepResult: result.data,
-              nextActivity: nextStep.activity.name,
-              nextStepOptions: toolSuggestions,
-            },
-            _meta: {
-              branchingEnabled: toolSuggestions.length > 1,
-              suggestedNextTool: primarySuggestion?.toolName,
-            },
-          },
-          session: updatedSession,
-          // Keep single nextInstruction for backwards compatibility
-          nextInstruction: primarySuggestion
-            ? {
-                toolName: primarySuggestion.toolName,
-                parameters: primarySuggestion.parameters,
-              }
-            : {
-                toolName: `${this.name}_continue`,
-                parameters: {
-                  sessionId,
-                  ...result.data,
-                },
-              },
-          // Include all suggestions for branching-aware clients
-          nextInstructions: toolSuggestions,
-        };
-      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      await this.failWorkflow(sessionId, errorMessage);
-
-      return {
-        toolResult: {
-          content: [
-            {
-              type: 'text',
-              text: `Workflow failed at step ${stepIndex}: ${errorMessage}`,
-            },
-          ],
-          isError: true,
-        },
-        session: this.sessionManager.getSession(sessionId)!,
-      };
+      return this.handleFailedStep(
+        sessionId,
+        stepIndex,
+        activity.name,
+        errorMessage
+      );
     }
+  }
+
+  /**
+   * Runs the activity for a given step and records the execution
+   */
+  private async runActivityForStep(
+    activity: McpActivityTool,
+    session: WorkflowSession,
+    stepIndex: number,
+    stepInput: any
+  ): Promise<ActivityResult> {
+    const step = this.config.steps[stepIndex];
+
+    let actualInput = stepInput;
+
+    // 1. Automatic Schema-Based Mapping
+    if (!step.inputMapper) {
+      // Only apply auto-mapping if no explicit inputMapper is provided
+      const currentInputSchema = activity.getInputSchema();
+      const autoMappedInput: Record<string, any> = {};
+
+      if (stepIndex > 0) {
+        // For subsequent steps, apply auto-mapping
+        if (typeof stepInput !== "object" || stepInput === null) {
+          // Handle primitive output from previous step
+          const inputSchemaKeys = Object.keys(currentInputSchema);
+          if (inputSchemaKeys.length === 1) {
+            autoMappedInput[inputSchemaKeys[0]] = stepInput;
+          }
+        } else {
+          // Handle object output from previous step
+          const prevOutputSchema =
+            this.config.steps[stepIndex - 1].activity.getOutputSchema();
+          console.log(prevOutputSchema);
+          for (const key in currentInputSchema) {
+            if (
+              Object.prototype.hasOwnProperty.call(currentInputSchema, key) &&
+              Object.prototype.hasOwnProperty.call(prevOutputSchema, key) &&
+              Object.prototype.hasOwnProperty.call(stepInput, key)
+            ) {
+              autoMappedInput[key] = stepInput[key];
+            }
+          }
+        }
+        actualInput = autoMappedInput; // Assign autoMappedInput only for subsequent steps
+      }
+    }
+
+    // 2. Apply explicit inputMapper if defined (overrides auto-mapping)
+    const mappedInput = step.inputMapper
+      ? step.inputMapper(stepInput, session.memory)
+      : actualInput;
+
+    console.log(mappedInput);
+    const context: ActivityContext = {
+      input: mappedInput || {},
+      sessionId: session.sessionId,
+      memory: session.memory,
+      metadata: {
+        workflowName: this.name,
+        currentStep: stepIndex,
+        totalSteps: this.config.steps.length,
+        startedAt: session.startedAt,
+      },
+    };
+
+    const startedAt = new Date();
+    const result = await activity.execute(context);
+    const completedAt = new Date();
+
+    await this.sessionManager.recordStepExecution(
+      session.sessionId,
+      stepIndex,
+      activity.name,
+      startedAt,
+      completedAt,
+      result.success ?? true,
+      result.error
+    );
+
+    await this.sessionManager.setMemory(
+      session.sessionId,
+      activity.name,
+      result.data
+    );
+
+    return result;
+  }
+
+  /**
+   * Handles the logic for a successfully completed step
+   */
+  private async handleSuccessfulStep(
+    sessionId: string,
+    stepIndex: number,
+    activityName: string,
+    result: ActivityResult,
+    stepInput: any
+  ): Promise<WorkflowToolResponse> {
+    const isLastStep = stepIndex === this.config.steps.length - 1;
+    if (isLastStep) {
+      return this.completeWorkflow(sessionId);
+    }
+
+    const toolSuggestions = await this.buildToolCallSuggestions(
+      stepIndex,
+      result,
+      sessionId,
+      stepInput
+    );
+
+    const nextStep = this.config.steps[stepIndex + 1];
+    const updatedSession = (await this.sessionManager.getSession(sessionId))!;
+    const primarySuggestion = toolSuggestions[0];
+
+    return {
+      toolResult: {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              message: `Step ${stepIndex} (${activityName}) completed successfully`,
+              result: result.data,
+              nextStep: {
+                index: stepIndex + 1,
+                activity: nextStep.activity.name,
+              },
+              progress: {
+                current: stepIndex + 1,
+                total: this.config.steps.length,
+              },
+              branchOptions:
+                toolSuggestions.length > 1 ? toolSuggestions : undefined,
+            }),
+          },
+        ],
+        structuredContent: {
+          sessionId: sessionId,
+          stepResult: result.data,
+          nextActivity: nextStep.activity.name,
+          nextStepOptions: toolSuggestions,
+        },
+        _meta: {
+          branchingEnabled: toolSuggestions.length > 1,
+          suggestedNextTool: primarySuggestion?.toolName,
+        },
+      },
+      session: updatedSession,
+      nextInstruction: {
+        toolName: `${this.name}_continue`,
+        parameters: {
+          sessionId,
+          ...result.data,
+        },
+      },
+      nextInstructions: toolSuggestions,
+    };
+  }
+
+  /**
+   * Handles the logic for a failed step
+   */
+  private async handleFailedStep(
+    sessionId: string,
+    stepIndex: number,
+    activityName: string,
+    error: string | undefined
+  ): Promise<WorkflowToolResponse> {
+    await this.failWorkflow(
+      sessionId,
+      error || "Activity failed without error message"
+    );
+
+    return {
+      toolResult: {
+        content: [
+          {
+            type: "text",
+            text: `Workflow failed at step ${stepIndex} (${activityName}): ${error}`,
+          },
+        ],
+        isError: true,
+      },
+      session: (await this.sessionManager.getSession(sessionId))!,
+    };
   }
 
   /**
@@ -506,12 +547,15 @@ export class McpWorkflow {
   private async completeWorkflow(
     sessionId: string
   ): Promise<WorkflowToolResponse> {
-    const session = this.sessionManager.getSession(sessionId);
+    const session = await this.sessionManager.getSession(sessionId);
     if (!session) {
       throw new Error(`Workflow session ${sessionId} not found`);
     }
 
-    this.sessionManager.completeSession(sessionId, WorkflowStatus.COMPLETED);
+    await this.sessionManager.completeSession(
+      sessionId,
+      WorkflowStatus.COMPLETED
+    );
 
     // Call the onSuccess callback if provided
     await this.config.onSuccess?.(session.memory, sessionId);
@@ -519,7 +563,7 @@ export class McpWorkflow {
     // Call the onComplete callback if provided
     await this.config.onComplete?.(WorkflowStatus.COMPLETED, sessionId);
 
-    const finalSession = this.sessionManager.getSession(sessionId)!;
+    const finalSession = (await this.sessionManager.getSession(sessionId))!;
 
     // Convert memory Map to plain object for serialization
     const memoryObject = Object.fromEntries(finalSession.memory);
@@ -528,9 +572,9 @@ export class McpWorkflow {
       toolResult: {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: JSON.stringify({
-              message: 'Workflow completed successfully',
+              message: "Workflow completed successfully",
               results: memoryObject,
               executionTime:
                 finalSession.completedAt!.getTime() -
@@ -539,7 +583,7 @@ export class McpWorkflow {
           },
         ],
         structuredContent: {
-          status: 'completed',
+          status: "completed",
           results: memoryObject,
         },
       },
@@ -551,7 +595,7 @@ export class McpWorkflow {
    * Fails the workflow
    */
   private async failWorkflow(sessionId: string, error: string): Promise<void> {
-    this.sessionManager.completeSession(
+    await this.sessionManager.completeSession(
       sessionId,
       WorkflowStatus.FAILED,
       error
@@ -568,12 +612,15 @@ export class McpWorkflow {
    * Cancels a workflow execution
    */
   async cancel(sessionId: string): Promise<void> {
-    const session = this.sessionManager.getSession(sessionId);
+    const session = await this.sessionManager.getSession(sessionId);
     if (!session) {
       throw new Error(`Workflow session ${sessionId} not found`);
     }
 
-    this.sessionManager.completeSession(sessionId, WorkflowStatus.CANCELLED);
+    await this.sessionManager.completeSession(
+      sessionId,
+      WorkflowStatus.CANCELLED
+    );
 
     // Call the onComplete callback if provided
     await this.config.onComplete?.(WorkflowStatus.CANCELLED, sessionId);
@@ -582,7 +629,9 @@ export class McpWorkflow {
   /**
    * Gets the current status of a workflow session
    */
-  getSessionStatus(sessionId: string): WorkflowSession | undefined {
+  async getSessionStatus(
+    sessionId: string
+  ): Promise<WorkflowSession | undefined> {
     return this.sessionManager.getSession(sessionId);
   }
 
@@ -592,7 +641,13 @@ export class McpWorkflow {
   toMcpStartToolCallback() {
     return async (args: any): Promise<CallToolResult> => {
       const response = await this.start(args);
-      return response.toolResult;
+      return {
+        ...response.toolResult,
+        structuredContent: {
+          ...response.toolResult.structuredContent,
+          nextInstruction: response.nextInstruction,
+        },
+      };
     };
   }
 
@@ -602,11 +657,14 @@ export class McpWorkflow {
   toMcpContinueToolCallback() {
     return async (args: any): Promise<CallToolResult> => {
       const { sessionId, ...stepInput } = args;
-      // Pass all args except sessionId as the step input
-      const inputData =
-        Object.keys(stepInput).length > 0 ? stepInput : undefined;
-      const response = await this.continue(sessionId, inputData);
-      return response.toolResult;
+      const response = await this.continue(stepInput);
+      return {
+        ...response.toolResult,
+        structuredContent: {
+          ...response.toolResult.structuredContent,
+          nextInstruction: response.nextInstruction,
+        },
+      };
     };
   }
 
@@ -628,7 +686,6 @@ export class McpWorkflow {
    */
   getContinueInputSchema(): ZodRawShape {
     return {
-      sessionId: z.string().describe('The session ID to continue'),
       // The rest of the input will be passed as step input
     };
   }

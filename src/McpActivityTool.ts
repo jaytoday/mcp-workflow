@@ -46,53 +46,59 @@ export class McpActivityTool<
     let result: ActivityResult;
 
     try {
-      // Validate input if schema is provided
-      if (this.inputSchema && context.input) {
-        this.inputSchema.parse(context.input);
-      }
+      this.validateInput(context.input);
 
-      // Handle timeout if configured
-      if (this.config.timeout) {
-        result = await this.executeWithTimeout(context, this.config.timeout);
-      } else {
-        result = await this.config.callbacks.run(context);
-      }
+      result = await this.runActivity(context);
 
-      // Validate output if schema is provided
-      if (this.outputSchema && result.data) {
-        this.outputSchema.parse(result.data);
-      }
+      // Default success to true if not explicitly set to false
+      result.success = result.success !== false;
 
-      // If the activity returned success, call onSuccess
-      if (result.success) {
-        await this.config.callbacks.onSuccess?.(result, context);
-      } else {
-        // If the activity returned failure, call onFailure
-        await this.config.callbacks.onFailure?.(result, context);
-      }
+
+      this.validateOutput(result.data);
+
+      await this.runPostExecutionCallbacks(result, context);
     } catch (error) {
-      // Handle any errors that occurred
       result = {
         success: false,
         error: error instanceof Error ? error.message : String(error),
-        metadata: {
-          executionTimeMs: Date.now() - startTime,
-        },
       };
-
       await this.config.callbacks.onFailure?.(result, context);
     } finally {
-      // Always call onComplete
       await this.config.callbacks.onComplete?.(result!, context);
     }
 
-    // Add execution time to metadata
-    if (!result!.metadata) {
-      result!.metadata = {};
-    }
-    result!.metadata.executionTimeMs = Date.now() - startTime;
-
+    result!.metadata = { ...result!.metadata, executionTimeMs: Date.now() - startTime };
     return result!;
+  }
+
+  private validateInput(input: any): void {
+    if (this.inputSchema && input) {
+      this.inputSchema.parse(input);
+    }
+  }
+
+  private validateOutput(output: any): void {
+    if (this.outputSchema && output) {
+      this.outputSchema.parse(output);
+    }
+  }
+
+  private async runActivity(context: ActivityContext): Promise<ActivityResult> {
+    if (this.config.timeout) {
+      return this.executeWithTimeout(context, this.config.timeout);
+    }
+    return this.config.callbacks.run(context);
+  }
+
+  private async runPostExecutionCallbacks(
+    result: ActivityResult,
+    context: ActivityContext
+  ): Promise<void> {
+    if (result.success) {
+      await this.config.callbacks.onSuccess?.(result, context);
+    } else {
+      await this.config.callbacks.onFailure?.(result, context);
+    }
   }
 
   /**

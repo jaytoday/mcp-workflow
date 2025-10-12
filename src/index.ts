@@ -19,7 +19,6 @@ export type {
   WorkflowSession,
   WorkflowToolResponse,
   ToolCallSuggestion,
-  BranchDefinition,
   BranchConfig,
 } from './types.js';
 
