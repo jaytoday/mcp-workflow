@@ -1,0 +1,36 @@
+{
+  "name": "mcp-workflow",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "workflow",
+    "modelcontextprotocol",
+    "sdk"
+  ],
+  "author": "P0u4a",
+  "license": "MIT",
+  "description": "A workflow engine for the Model Context Protocol SDK",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.9",
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.4"
+  }
+}
