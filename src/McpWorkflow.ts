@@ -65,14 +65,6 @@ export class McpWorkflow {
   }
 
   /**
-   * Registers an activity tool that can be used in workflow steps
-   * @deprecated Activities are now automatically registered from workflow steps
-   */
-  registerActivity(activity: McpActivityTool): void {
-    this.activities.set(activity.name, activity);
-  }
-
-  /**
    * Attaches this workflow to an MCP server and automatically registers the workflow tools.
    * This will register two tools:
    * - `{workflow_name}_start`: Starts a new workflow execution
