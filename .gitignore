@@ -40,3 +40,4 @@ coverage/
 # MCP Config
 .gemini
 .claude
+.mcp.json
