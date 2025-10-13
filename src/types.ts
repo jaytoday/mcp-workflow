@@ -221,11 +221,6 @@ export interface WorkflowToolResponse {
   toolResult: CallToolResult;
   /** The current workflow session state */
   session: WorkflowSession;
-  /** Instructions for the next step (single option for backwards compatibility) */
-  nextInstruction?: {
-    toolName: string;
-    parameters: Record<string, any>;
-  };
   /** All available next step options (for branching workflows) */
   nextInstructions?: ToolCallSuggestion[];
 }

@@ -1,8 +1,8 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodRawShape } from "zod";
-import { McpActivityTool } from "./McpActivityTool.js";
-import { WorkflowSessionManager } from "./WorkflowSessionManager.js";
+import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { ZodRawShape } from 'zod';
+import { McpActivityTool } from './McpActivityTool.js';
+import { WorkflowSessionManager } from './WorkflowSessionManager.js';
 import {
   WorkflowConfig,
   WorkflowStatus,
@@ -12,7 +12,7 @@ import {
   ToolCallSuggestion,
   ActivityResult,
   WorkflowStep,
-} from "./types.js";
+} from './types.js';
 
 /**
  * McpWorkflow orchestrates a sequence of McpActivityTool executions.
@@ -48,7 +48,7 @@ export class McpWorkflow {
    */
   private validateConfig(): void {
     if (!this.config.steps || this.config.steps.length === 0) {
-      throw new Error("Workflow must have at least one step");
+      throw new Error('Workflow must have at least one step');
     }
   }
 
@@ -111,7 +111,7 @@ export class McpWorkflow {
       {
         title: options?.continueToolTitle || `Continue ${this.name} Workflow`,
         description: `Continues the ${this.name} workflow from a session`,
-        inputSchema: this.getContinueInputSchema(),
+        inputSchema: {},
       },
       this.toMcpContinueToolCallback()
     );
@@ -155,7 +155,7 @@ export class McpWorkflow {
     if (input) {
       await this.sessionManager.setMemory(
         session.sessionId,
-        "__workflow_input__",
+        '__workflow_input__',
         input
       );
     }
@@ -172,10 +172,10 @@ export class McpWorkflow {
   /**
    * Continues a workflow execution from a specific session
    */
-  async continue(stepInput?: any): Promise<WorkflowToolResponse> {
+  async continue(): Promise<WorkflowToolResponse> {
     const sessionId = this.lastSessionId;
     if (!sessionId) {
-      throw new Error("No active workflow session to continue.");
+      throw new Error('No active workflow session to continue.');
     }
 
     const session = await this.sessionManager.getSession(sessionId);
@@ -195,8 +195,16 @@ export class McpWorkflow {
       return this.completeWorkflow(sessionId);
     }
 
-    // Execute the next step with the provided input
-    return this.executeStep(sessionId, nextStepIndex, stepInput);
+    // Retrieve the previous step's output from memory
+    let inputForNextStep = undefined;
+    if (session.currentStep >= 0) {
+      const previousStep = this.config.steps[session.currentStep];
+      const previousActivityName = previousStep.activity.name;
+      inputForNextStep = session.memory.get(previousActivityName);
+    }
+
+    // Execute the next step with the input from previous step
+    return this.executeStep(sessionId, nextStepIndex, inputForNextStep);
   }
 
   /**
@@ -221,25 +229,22 @@ export class McpWorkflow {
 
     // Then, evaluate branch definitions from step configuration
     if (step.branches && result.data) {
-      // Check if branches is an array (new syntax) or object (legacy syntax)
-      if (Array.isArray(step.branches)) {
-        for (const branchConfig of step.branches) {
-          if (branchConfig.when(result.data, stepInput, memory)) {
-            const parameters = branchConfig.with
-              ? branchConfig.with(result.data, stepInput, memory)
-              : result.data;
+      for (const branchConfig of step.branches) {
+        if (branchConfig.when(result.data, stepInput, memory)) {
+          const parameters = branchConfig.with
+            ? branchConfig.with(result.data, stepInput, memory)
+            : result.data;
 
-            suggestions.push({
-              toolName: branchConfig.call,
-              parameters: {
-                sessionId,
-                ...parameters,
-              },
-              condition:
-                branchConfig.description || `Branch: ${branchConfig.call}`,
-              priority: 100, // High priority for matched branch patterns
-            });
-          }
+          suggestions.push({
+            toolName: branchConfig.call,
+            parameters: {
+              sessionId,
+              ...parameters,
+            },
+            condition:
+              branchConfig.description || `Branch: ${branchConfig.call}`,
+            priority: 100, // High priority for matched branch patterns
+          });
         }
       }
     }
@@ -253,10 +258,8 @@ export class McpWorkflow {
       if (!continueExists) {
         suggestions.push({
           toolName: `${this.name}_continue`,
-          parameters: {
-            ...result.data,
-          },
-          condition: "Continue to next step in workflow",
+          parameters: {},
+          condition: 'Continue to next step in workflow',
           priority: 50, // Medium priority for default continuation
         });
       }
@@ -302,7 +305,7 @@ export class McpWorkflow {
     });
 
     if (await this.shouldSkipStep(step, session)) {
-      return this.continue(sessionId);
+      return this.continue();
     }
 
     const activity = step.activity;
@@ -359,47 +362,12 @@ export class McpWorkflow {
   ): Promise<ActivityResult> {
     const step = this.config.steps[stepIndex];
 
-    let actualInput = stepInput;
-
-    // 1. Automatic Schema-Based Mapping
-    if (!step.inputMapper) {
-      // Only apply auto-mapping if no explicit inputMapper is provided
-      const currentInputSchema = activity.getInputSchema();
-      const autoMappedInput: Record<string, any> = {};
-
-      if (stepIndex > 0) {
-        // For subsequent steps, apply auto-mapping
-        if (typeof stepInput !== "object" || stepInput === null) {
-          // Handle primitive output from previous step
-          const inputSchemaKeys = Object.keys(currentInputSchema);
-          if (inputSchemaKeys.length === 1) {
-            autoMappedInput[inputSchemaKeys[0]] = stepInput;
-          }
-        } else {
-          // Handle object output from previous step
-          const prevOutputSchema =
-            this.config.steps[stepIndex - 1].activity.getOutputSchema();
-          console.log(prevOutputSchema);
-          for (const key in currentInputSchema) {
-            if (
-              Object.prototype.hasOwnProperty.call(currentInputSchema, key) &&
-              Object.prototype.hasOwnProperty.call(prevOutputSchema, key) &&
-              Object.prototype.hasOwnProperty.call(stepInput, key)
-            ) {
-              autoMappedInput[key] = stepInput[key];
-            }
-          }
-        }
-        actualInput = autoMappedInput; // Assign autoMappedInput only for subsequent steps
-      }
-    }
-
-    // 2. Apply explicit inputMapper if defined (overrides auto-mapping)
+    // Apply inputMapper to transform the input if defined
+    // Otherwise pass the input as-is (expecting schemas to match)
     const mappedInput = step.inputMapper
       ? step.inputMapper(stepInput, session.memory)
-      : actualInput;
+      : stepInput;
 
-    console.log(mappedInput);
     const context: ActivityContext = {
       input: mappedInput || {},
       sessionId: session.sessionId,
@@ -465,7 +433,7 @@ export class McpWorkflow {
       toolResult: {
         content: [
           {
-            type: "text",
+            type: 'text',
             text: JSON.stringify({
               message: `Step ${stepIndex} (${activityName}) completed successfully`,
               result: result.data,
@@ -494,13 +462,6 @@ export class McpWorkflow {
         },
       },
       session: updatedSession,
-      nextInstruction: {
-        toolName: `${this.name}_continue`,
-        parameters: {
-          sessionId,
-          ...result.data,
-        },
-      },
       nextInstructions: toolSuggestions,
     };
   }
@@ -516,14 +477,14 @@ export class McpWorkflow {
   ): Promise<WorkflowToolResponse> {
     await this.failWorkflow(
       sessionId,
-      error || "Activity failed without error message"
+      error || 'Activity failed without error message'
     );
 
     return {
       toolResult: {
         content: [
           {
-            type: "text",
+            type: 'text',
             text: `Workflow failed at step ${stepIndex} (${activityName}): ${error}`,
           },
         ],
@@ -564,9 +525,9 @@ export class McpWorkflow {
       toolResult: {
         content: [
           {
-            type: "text",
+            type: 'text',
             text: JSON.stringify({
-              message: "Workflow completed successfully",
+              message: 'Workflow completed successfully',
               results: memoryObject,
               executionTime:
                 finalSession.completedAt!.getTime() -
@@ -575,7 +536,7 @@ export class McpWorkflow {
           },
         ],
         structuredContent: {
-          status: "completed",
+          status: 'completed',
           results: memoryObject,
         },
       },
@@ -633,13 +594,7 @@ export class McpWorkflow {
   toMcpStartToolCallback() {
     return async (args: any): Promise<CallToolResult> => {
       const response = await this.start(args);
-      return {
-        ...response.toolResult,
-        structuredContent: {
-          ...response.toolResult.structuredContent,
-          nextInstruction: response.nextInstruction,
-        },
-      };
+      return response.toolResult;
     };
   }
 
@@ -647,16 +602,10 @@ export class McpWorkflow {
    * Creates an MCP tool callback that continues the workflow
    */
   toMcpContinueToolCallback() {
-    return async (args: any): Promise<CallToolResult> => {
-      const { sessionId, ...stepInput } = args;
-      const response = await this.continue(stepInput);
-      return {
-        ...response.toolResult,
-        structuredContent: {
-          ...response.toolResult.structuredContent,
-          nextInstruction: response.nextInstruction,
-        },
-      };
+    return async (): Promise<CallToolResult> => {
+      // Continue automatically pulls from context, no need for input
+      const response = await this.continue();
+      return response.toolResult;
     };
   }
 
@@ -671,14 +620,5 @@ export class McpWorkflow {
 
     const firstActivity = this.config.steps[0].activity;
     return firstActivity.getInputSchema();
-  }
-
-  /**
-   * Gets the input schema for the workflow continue tool
-   */
-  getContinueInputSchema(): ZodRawShape {
-    return {
-      // The rest of the input will be passed as step input
-    };
   }
 }
