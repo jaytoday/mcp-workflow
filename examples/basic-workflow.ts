@@ -29,7 +29,8 @@ const addActivity = new McpActivityTool("add", "Adds two numbers together", {
     b: z.number(),
   },
   outputSchema: {
-    result: z.number(),
+    value: z.number(),  // Output 'value' to match multiply's input
+    factor: z.number().optional(),  // Can optionally pass factor through
   },
   callbacks: {
     run: async (context) => {
@@ -39,11 +40,14 @@ const addActivity = new McpActivityTool("add", "Adds two numbers together", {
       console.log(`[ADD] ${a} + ${b} = ${result}`);
 
       return {
-        data: { result },
+        data: {
+          value: result,  // Output as 'value' for next step
+          factor: 2       // Default factor for multiply step
+        },
       };
     },
     onSuccess: async (result, context) => {
-      console.log(`[ADD] Success! Result: ${result.data?.result}`);
+      console.log(`[ADD] Success! Result: ${result.data?.value}`);
     },
   },
 });
@@ -58,7 +62,7 @@ const multiplyActivity = new McpActivityTool(
       factor: z.number().default(2),
     },
     outputSchema: {
-      result: z.number(),
+      value: z.number(),  // Output 'value' to match format's input
     },
     callbacks: {
       run: async (context) => {
@@ -68,7 +72,7 @@ const multiplyActivity = new McpActivityTool(
         console.log(`[MULTIPLY] ${value} * ${factor} = ${result}`);
 
         return {
-          data: { result },
+          data: { value: result },  // Output as 'value' for next step
         };
       },
     },
