@@ -1,4 +1,4 @@
-import { WorkflowSession, WorkflowStatus } from './types.js';
+import { WorkflowSession, WorkflowStatus } from "./types.js";
 
 /**
  * Statistics about workflow sessions in the store

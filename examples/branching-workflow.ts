@@ -289,17 +289,19 @@ const userRegistrationWorkflow = new McpWorkflow(
           const originalInput = memory.get("__workflow_input__");
           return {
             email: originalInput?.email || "",
-            age: originalInput?.age || 0
+            age: originalInput?.age || 0,
           };
-        }
+        },
       },
       {
         activity: sendNotificationActivity,
         // Map registration output to notification input
         inputMapper: (prevOutput) => ({
           userId: prevOutput?.userId || "",
-          message: `Welcome! Your status is: ${prevOutput?.status || "unknown"}`
-        })
+          message: `Welcome! Your status is: ${
+            prevOutput?.status || "unknown"
+          }`,
+        }),
       },
     ],
     onSuccess: async (memory, sessionId) => {

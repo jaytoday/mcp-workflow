@@ -1,8 +1,8 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { ZodRawShape } from 'zod';
-import { McpActivityTool } from './McpActivityTool.js';
-import { WorkflowSessionManager } from './WorkflowSessionManager.js';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ZodRawShape } from "zod";
+import { McpActivityTool } from "./McpActivityTool.js";
+import { WorkflowSessionManager } from "./WorkflowSessionManager.js";
 import {
   WorkflowConfig,
   WorkflowStatus,
@@ -12,7 +12,7 @@ import {
   ToolCallSuggestion,
   ActivityResult,
   WorkflowStep,
-} from './types.js';
+} from "./types.js";
 
 /**
  * McpWorkflow orchestrates a sequence of McpActivityTool executions.
@@ -48,7 +48,7 @@ export class McpWorkflow {
    */
   private validateConfig(): void {
     if (!this.config.steps || this.config.steps.length === 0) {
-      throw new Error('Workflow must have at least one step');
+      throw new Error("Workflow must have at least one step");
     }
   }
 
@@ -155,7 +155,7 @@ export class McpWorkflow {
     if (input) {
       await this.sessionManager.setMemory(
         session.sessionId,
-        '__workflow_input__',
+        "__workflow_input__",
         input
       );
     }
@@ -175,7 +175,7 @@ export class McpWorkflow {
   async continue(): Promise<WorkflowToolResponse> {
     const sessionId = this.lastSessionId;
     if (!sessionId) {
-      throw new Error('No active workflow session to continue.');
+      throw new Error("No active workflow session to continue.");
     }
 
     const session = await this.sessionManager.getSession(sessionId);
@@ -259,7 +259,7 @@ export class McpWorkflow {
         suggestions.push({
           toolName: `${this.name}_continue`,
           parameters: {},
-          condition: 'Continue to next step in workflow',
+          condition: "Continue to next step in workflow",
           priority: 50, // Medium priority for default continuation
         });
       }
@@ -433,7 +433,7 @@ export class McpWorkflow {
       toolResult: {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: JSON.stringify({
               message: `Step ${stepIndex} (${activityName}) completed successfully`,
               result: result.data,
@@ -477,14 +477,14 @@ export class McpWorkflow {
   ): Promise<WorkflowToolResponse> {
     await this.failWorkflow(
       sessionId,
-      error || 'Activity failed without error message'
+      error || "Activity failed without error message"
     );
 
     return {
       toolResult: {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: `Workflow failed at step ${stepIndex} (${activityName}): ${error}`,
           },
         ],
@@ -525,9 +525,9 @@ export class McpWorkflow {
       toolResult: {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: JSON.stringify({
-              message: 'Workflow completed successfully',
+              message: "Workflow completed successfully",
               results: memoryObject,
               executionTime:
                 finalSession.completedAt!.getTime() -
@@ -536,7 +536,7 @@ export class McpWorkflow {
           },
         ],
         structuredContent: {
-          status: 'completed',
+          status: "completed",
           results: memoryObject,
         },
       },

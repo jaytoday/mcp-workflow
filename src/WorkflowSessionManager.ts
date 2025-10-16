@@ -1,7 +1,7 @@
-import { WorkflowSession, WorkflowStatus } from './types.js';
-import { WorkflowStore } from './WorkflowStore.js';
-import { InMemoryWorkflowStore } from './InMemoryWorkflowStore.js';
-import { randomUUID } from 'crypto';
+import { WorkflowSession, WorkflowStatus } from "./types.js";
+import { WorkflowStore } from "./WorkflowStore.js";
+import { InMemoryWorkflowStore } from "./InMemoryWorkflowStore.js";
+import { randomUUID } from "crypto";
 
 /**
  * Manages workflow sessions across multiple executions.
@@ -25,7 +25,10 @@ export class WorkflowSessionManager {
   /**
    * Creates a new workflow session
    */
-  async createSession(workflowName: string, totalSteps: number): Promise<WorkflowSession> {
+  async createSession(
+    workflowName: string,
+    totalSteps: number
+  ): Promise<WorkflowSession> {
     // Clean up old sessions if we're at the limit
     const stats = await this.store.getStats();
     if (stats.total >= this.maxSessions) {
@@ -179,7 +182,8 @@ export class WorkflowSessionManager {
 
     const byWorkflow: Record<string, number> = {};
     for (const session of sessions) {
-      byWorkflow[session.workflowName] = (byWorkflow[session.workflowName] || 0) + 1;
+      byWorkflow[session.workflowName] =
+        (byWorkflow[session.workflowName] || 0) + 1;
     }
 
     return {

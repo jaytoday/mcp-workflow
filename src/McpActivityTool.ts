@@ -1,10 +1,6 @@
-import { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { z, ZodRawShape } from 'zod';
-import {
-  ActivityConfig,
-  ActivityContext,
-  ActivityResult,
-} from './types.js';
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z, ZodRawShape } from "zod";
+import { ActivityConfig, ActivityContext, ActivityResult } from "./types.js";
 
 /**
  * McpActivityTool wraps a single unit of work that can be executed as part of a workflow.
@@ -53,7 +49,6 @@ export class McpActivityTool<
       // Default success to true if not explicitly set to false
       result.success = result.success !== false;
 
-
       this.validateOutput(result.data);
 
       await this.runPostExecutionCallbacks(result, context);
@@ -67,7 +62,10 @@ export class McpActivityTool<
       await this.config.callbacks.onComplete?.(result!, context);
     }
 
-    result!.metadata = { ...result!.metadata, executionTimeMs: Date.now() - startTime };
+    result!.metadata = {
+      ...result!.metadata,
+      executionTimeMs: Date.now() - startTime,
+    };
     return result!;
   }
 
@@ -137,7 +135,7 @@ export class McpActivityTool<
         if (result.success) {
           return result;
         }
-        lastError = new Error(result.error || 'Activity failed');
+        lastError = new Error(result.error || "Activity failed");
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
       }
@@ -167,10 +165,10 @@ export class McpActivityTool<
       // For workflow usage, we'll use a different mechanism
       const context: ActivityContext = {
         input: args,
-        sessionId: 'standalone',
+        sessionId: "standalone",
         memory: new Map(),
         metadata: {
-          workflowName: 'standalone',
+          workflowName: "standalone",
           currentStep: 0,
           totalSteps: 1,
           startedAt: new Date(),
@@ -182,7 +180,7 @@ export class McpActivityTool<
       return {
         content: [
           {
-            type: 'text',
+            type: "text",
             text: JSON.stringify(result),
           },
         ],

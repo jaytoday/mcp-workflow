@@ -271,8 +271,8 @@ const dataProcessingWorkflow = new McpWorkflow(
         // Map the fetch output to transform input
         inputMapper: (prevOutput) => ({
           data: prevOutput?.data || [],
-          operation: "double" // Default operation
-        })
+          operation: "double", // Default operation
+        }),
       },
       {
         activity: validateDataActivity,
@@ -280,8 +280,8 @@ const dataProcessingWorkflow = new McpWorkflow(
         // Map the transform output to validate input
         inputMapper: (prevOutput) => ({
           data: prevOutput?.transformed || [],
-          minLength: 3
-        })
+          minLength: 3,
+        }),
       },
       {
         activity: aggregateDataActivity,
@@ -295,9 +295,9 @@ const dataProcessingWorkflow = new McpWorkflow(
         inputMapper: (prevOutput, memory) => {
           const transformData = memory.get("transform_data");
           return {
-            data: transformData?.transformed || []
+            data: transformData?.transformed || [],
           };
-        }
+        },
       },
       {
         activity: generateReportActivity,
@@ -306,9 +306,9 @@ const dataProcessingWorkflow = new McpWorkflow(
           stats: prevOutput || {},
           metadata: {
             fetchTimestamp: memory.get("fetch_data")?.timestamp,
-            transformOperation: memory.get("transform_data")?.operation
-          }
-        })
+            transformOperation: memory.get("transform_data")?.operation,
+          },
+        }),
       },
     ],
     timeout: 30000, // 30 second total workflow timeout
