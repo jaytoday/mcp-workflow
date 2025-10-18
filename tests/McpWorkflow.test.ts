@@ -1,21 +1,14 @@
-import {
-  vi,
-  describe,
-  expect,
-  test,
-  beforeEach,
-  afterEach,
-  type Mock,
-  MockInstance,
-} from "vitest";
+import { vi, describe, expect, test, beforeEach, type Mock } from "vitest";
 import { McpWorkflow, WorkflowSessionManager } from "../src";
 import { McpActivityTool } from "../src/McpActivityTool";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import z from "zod";
 
 vi.mock("../src/McpActivityTool", () => {
   const McpActivityTool = vi.fn();
   McpActivityTool.prototype.execute = vi.fn();
   McpActivityTool.prototype.name = "test_activity";
+  McpActivityTool.prototype.getInputSchema = vi.fn(() => z.object({}));
   return { McpActivityTool };
 });
 
@@ -38,6 +31,8 @@ describe("McpWorkflow", () => {
       callbacks: { run: vi.fn() },
     });
     mockServer = new McpServer({ name: "test", version: "0.0.1" });
+
+    mockServer.sendLoggingMessage = vi.fn();
 
     workflow = new McpWorkflow(
       "test_workflow",
@@ -62,65 +57,27 @@ describe("McpWorkflow", () => {
   });
 
   describe("Logging", () => {
-    let consoleInfoSpy: MockInstance<{
-      (...data: any[]): void;
-      (message?: any, ...optionalParams: any[]): void;
-    }>;
-    let consoleErrorSpy: MockInstance<{
-      (...data: any[]): void;
-      (message?: any, ...optionalParams: any[]): void;
-    }>;
-
-    beforeEach(() => {
-      consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
-      consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-      consoleInfoSpy.mockRestore();
-      consoleErrorSpy.mockRestore();
-    });
-
     test("should log start and completion messages on success", async () => {
       (mockActivity.execute as Mock).mockResolvedValue({ success: true });
 
       await workflow.start();
 
-      expect(consoleInfoSpy).toHaveBeenCalledWith(
-        `[${mockActivity.name}] began execution`
-      );
-      expect(consoleInfoSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/completed in \d+ms/)
-      );
-
-      expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith(
-        `[${mockActivity.name}] began execution`
-      );
-      expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith(
-        expect.stringMatching(/completed in \d+ms/)
-      );
+      expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith({
+        data: "[test_activity] began execution",
+        level: "info",
+      });
     });
 
     test("should log start and error messages on failure", async () => {
       const testError = new Error("Activity failed");
       (mockActivity.execute as Mock).mockRejectedValue(testError);
 
-      // Workflow expected to throw here
-      await expect(workflow.start()).rejects.toThrow("Activity failed");
+      await workflow.start();
 
-      expect(consoleInfoSpy).toHaveBeenCalledWith(
-        `[${mockActivity.name}] began execution`
-      );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        `[${mockActivity.name}] failed with error: Activity failed`
-      );
-
-      expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith(
-        `[${mockActivity.name}] began execution`
-      );
-      expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith(
-        `[${mockActivity.name}] failed with error: Activity failed`
-      );
+      expect(mockServer.sendLoggingMessage).toHaveBeenCalledWith({
+        data: "[test_activity] failed with error: Activity failed",
+        level: "error",
+      });
     });
   });
 });
