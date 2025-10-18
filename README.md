@@ -20,12 +20,6 @@ npm i @p0u4a/mcp-workflow
 - **Persistent Storage**: Pluggable storage layer for session persistence (default is in-memory).
 - **MCP Integration**: Seamlessly register workflows as MCP tools
 
-## Installation
-
-```bash
-npm install mcp-workflow @modelcontextprotocol/sdk zod
-```
-
 ## Architecture
 
 ### High-Level Overview
@@ -34,42 +28,42 @@ The `mcp-workflow` library provides a structured way to define and execute compl
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        MCP Client                            │
-│                     (e.g., Gemini)                           │
+│                        MCP Client                           │
+│                     (e.g., Gemini)                          │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          │ JSON-RPC
                          │
 ┌────────────────────────▼────────────────────────────────────┐
-│                     MCP Server                               │
-│                (with mcp-workflow)                           │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │              Workflow Tools                          │  │
-│  │  • {workflow}_start                                  │  │
-│  │  • {workflow}_continue                               │  │
-│  └────────────────────┬─────────────────────────────────┘  │
+│                     MCP Server                              │
+│                (with mcp-workflow)                          │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              Workflow Tools                          │   │
+│  │  • {workflow}_start                                  │   │
+│  │  • {workflow}_continue                               │   │
+│  └────────────────────┬─────────────────────────────────┘   │
 │                       │                                     │
-│  ┌────────────────────▼─────────────────────────────────┐  │
-│  │           McpWorkflow Instance                       │  │
-│  │  • Orchestrates activity execution                   │  │
-│  │  • Manages workflow state                            │  │
-│  │  • Handles step transitions                          │  │
-│  └────────────────────┬─────────────────────────────────┘  │
+│  ┌────────────────────▼─────────────────────────────────┐   │
+│  │           McpWorkflow Instance                       │   │
+│  │  • Orchestrates activity execution                   │   │
+│  │  • Manages workflow state                            │   │
+│  │  • Handles step transitions                          │   │
+│  └────────────────────┬─────────────────────────────────┘   │
 │                       │                                     │
-│  ┌────────────────────▼─────────────────────────────────┐  │
-│  │      WorkflowSessionManager                          │  │
-│  │  • Creates and tracks sessions                       │  │
-│  │  • Manages workflow memory                           │  │
-│  │  • Records execution history                         │  │
-│  └────────────────────┬─────────────────────────────────┘  │
+│  ┌────────────────────▼─────────────────────────────────┐   │
+│  │      WorkflowSessionManager                          │   │
+│  │  • Creates and tracks sessions                       │   │
+│  │  • Manages workflow memory                           │   │
+│  │  • Records execution history                         │   │
+│  └────────────────────┬─────────────────────────────────┘   │
 │                       │                                     │
-│  ┌────────────────────▼─────────────────────────────────┐  │
-│  │       McpActivityTool Instances                      │  │
-│  │  • Execute individual activities                     │  │
-│  │  • Validate input/output                             │  │
-│  │  • Trigger lifecycle hooks                           │  │
-│  └──────────────────────────────────────────────────────┘  │
+│  ┌────────────────────▼─────────────────────────────────┐   │
+│  │       McpActivityTool Instances                      │   │
+│  │  • Execute individual activities                     │   │
+│  │  • Validate input/output                             │   │
+│  │  • Trigger lifecycle hooks                           │   │
+│  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
 

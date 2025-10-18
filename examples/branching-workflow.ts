@@ -65,10 +65,6 @@ const validateActivity = new McpActivityTool(
         const valid = errors.length === 0;
         const requiresApproval = Boolean(valid && amount && amount > 10000);
 
-        console.log(
-          `[VALIDATE] Valid: ${valid}, Errors: ${errors.length}, Requires Approval: ${requiresApproval}`
-        );
-
         // Simply return the data - branching logic is now handled declaratively in the workflow
         return {
           success: true,
@@ -103,8 +99,6 @@ const processRegistrationActivity = new McpActivityTool(
         // Simulate processing
         const userId = `user_${Date.now()}`;
 
-        console.log(`[PROCESS] Created user ${userId} for ${email}`);
-
         return {
           success: true,
           data: {
@@ -135,12 +129,6 @@ const sendNotificationActivity = new McpActivityTool(
         const { userId, message } = context.input;
 
         const notificationId = `notif_${Date.now()}`;
-
-        console.log(
-          `[NOTIFY] Sent notification ${notificationId} to ${userId}: ${
-            message || "Welcome!"
-          }`
-        );
 
         return {
           success: true,
@@ -189,10 +177,6 @@ const errorCorrectionActivity = new McpActivityTool(
 
         const corrected = remainingErrors.length === 0;
 
-        console.log(
-          `[ERROR_CORRECT] Corrected: ${corrected}, Remaining: ${remainingErrors.length}`
-        );
-
         return {
           success: true,
           data: {
@@ -227,10 +211,6 @@ const requestApprovalActivity = new McpActivityTool(
         const { reason } = context.input;
 
         const approvalId = `approval_${Date.now()}`;
-
-        console.log(
-          `[APPROVAL] Request ${approvalId} for: ${reason} - ${status}`
-        );
 
         return {
           success: true,
@@ -305,17 +285,24 @@ const userRegistrationWorkflow = new McpWorkflow(
       },
     ],
     onSuccess: async (memory, sessionId) => {
-      console.log(`\n[WORKFLOW] ✓ User Registration completed!`);
-      console.log(`[WORKFLOW] Session ID: ${sessionId}`);
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[WORKFLOW] ✓ User Registration completed! Session ID: ${sessionId}`,
+      });
 
       const result = memory.get("send_notification");
       if (result?.notificationId) {
-        console.log(`[WORKFLOW] Notification sent: ${result.notificationId}`);
+        server.sendLoggingMessage({
+          level: "info",
+          data: `[WORKFLOW] Notification sent: ${result.notificationId}`,
+        });
       }
     },
     onFailure: async (error, sessionId) => {
-      console.error(`\n[WORKFLOW] ✗ Registration failed: ${error.message}`);
-      console.error(`[WORKFLOW] Session ID: ${sessionId}`);
+      server.sendLoggingMessage({
+        level: "error",
+        data: `[WORKFLOW] ✗ Registration failed: ${error.message}. Session ID: ${sessionId}`,
+      });
     },
   },
   sessionManager
@@ -335,17 +322,22 @@ const errorCorrectionWorkflow = new McpWorkflow(
       },
     ],
     onSuccess: async (memory, sessionId) => {
-      console.log(`\n[ERROR_CORRECTION] ✓ Error correction completed!`);
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[ERROR_CORRECTION] ✓ Error correction completed!`,
+      });
 
       const result = memory.get("correct_errors");
       if (result?.corrected) {
-        console.log(
-          `[ERROR_CORRECTION] Errors corrected, can retry registration`
-        );
+        server.sendLoggingMessage({
+          level: "info",
+          data: `[ERROR_CORRECTION] Errors corrected, can retry registration`,
+        });
       } else {
-        console.log(
-          `[ERROR_CORRECTION] Could not auto-correct, manual review needed`
-        );
+        server.sendLoggingMessage({
+          level: "info",
+          data: `[ERROR_CORRECTION] Could not auto-correct, manual review needed`,
+        });
       }
     },
   },
@@ -366,11 +358,17 @@ const approvalWorkflow = new McpWorkflow(
       },
     ],
     onSuccess: async (memory, sessionId) => {
-      console.log(`\n[APPROVAL] ✓ Approval workflow completed!`);
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[APPROVAL] ✓ Approval workflow completed!`,
+      });
 
       const result = memory.get("request_approval");
       if (result?.status === "approved") {
-        console.log(`[APPROVAL] Request approved, can continue registration`);
+        server.sendLoggingMessage({
+          level: "info",
+          data: `[APPROVAL] Request approved, can continue registration`,
+        });
       }
     },
   },

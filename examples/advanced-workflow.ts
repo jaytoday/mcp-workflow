@@ -57,7 +57,6 @@ const fetchDataActivity = new McpActivityTool(
         }
 
         const data = [1, 2, 3, 4, 5];
-        console.log(`[FETCH] Retrieved ${data.length} items from ${source}`);
 
         return {
           success: true,
@@ -66,12 +65,6 @@ const fetchDataActivity = new McpActivityTool(
             timestamp: new Date().toISOString(),
           },
         };
-      },
-      onSuccess: async (result) => {
-        console.log(`[FETCH] Success at ${result.data?.timestamp}`);
-      },
-      onFailure: async (result) => {
-        console.error(`[FETCH] Failed: ${result.error}`);
       },
     },
     timeout: 5000, // 5 second timeout
@@ -112,8 +105,6 @@ const transformDataActivity = new McpActivityTool(
             break;
         }
 
-        console.log(`[TRANSFORM] Applied ${operation} operation`);
-
         return {
           success: true,
           data: {
@@ -147,8 +138,6 @@ const validateDataActivity = new McpActivityTool(
         const message = valid
           ? `Data is valid (${data.length} items)`
           : `Data is invalid (${data.length} < ${minLength})`;
-
-        console.log(`[VALIDATE] ${message}`);
 
         return {
           success: true,
@@ -184,10 +173,6 @@ const aggregateDataActivity = new McpActivityTool(
         const average = sum / data.length;
         const min = Math.min(...data);
         const max = Math.max(...data);
-
-        console.log(
-          `[AGGREGATE] Sum: ${sum}, Avg: ${average}, Min: ${min}, Max: ${max}`
-        );
 
         return {
           success: true,
@@ -240,8 +225,6 @@ Processing Steps: ${context.metadata.currentStep + 1}/${
           context.metadata.totalSteps
         }
         `.trim();
-
-        console.log(`[REPORT] Generated report`);
 
         return {
           success: true,
@@ -313,24 +296,34 @@ const dataProcessingWorkflow = new McpWorkflow(
     ],
     timeout: 30000, // 30 second total workflow timeout
     onSuccess: async (memory, sessionId) => {
-      console.log(`\n[WORKFLOW] ✓ Completed successfully!`);
-      console.log(`[WORKFLOW] Session ID: ${sessionId}`);
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[WORKFLOW] ✓ Completed successfully! Session ID: ${sessionId}`,
+      });
 
       const report = memory.get("generate_report");
       if (report?.report) {
-        console.log("\n" + report.report);
+        server.sendLoggingMessage({ level: "info", data: `\n${report.report}` });
       }
     },
     onFailure: async (error, sessionId) => {
-      console.error(`\n[WORKFLOW] ✗ Failed: ${error.message}`);
-      console.error(`[WORKFLOW] Session ID: ${sessionId}`);
+      server.sendLoggingMessage({
+        level: "error",
+        data: `[WORKFLOW] ✗ Failed: ${error.message}. Session ID: ${sessionId}`,
+      });
     },
     onComplete: async (status, sessionId) => {
-      console.log(`\n[WORKFLOW] Final status: ${status}`);
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[WORKFLOW] Final status: ${status}`,
+      });
 
       // Get session stats
       const stats = await sessionManager.getStats();
-      console.log(`[WORKFLOW] Active sessions: ${stats.total}`);
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[WORKFLOW] Active sessions: ${stats.total}`,
+      });
     },
   },
   sessionManager

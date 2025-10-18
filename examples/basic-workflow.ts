@@ -37,17 +37,12 @@ const addActivity = new McpActivityTool("add", "Adds two numbers together", {
       const { a, b } = context.input;
       const result = a + b;
 
-      console.log(`[ADD] ${a} + ${b} = ${result}`);
-
       return {
         data: {
           value: result, // Output as 'value' for next step
           factor: 2, // Default factor for multiply step
         },
       };
-    },
-    onSuccess: async (result, context) => {
-      console.log(`[ADD] Success! Result: ${result.data?.value}`);
     },
   },
 });
@@ -68,8 +63,6 @@ const multiplyActivity = new McpActivityTool(
       run: async (context) => {
         const { value, factor } = context.input;
         const result = value * factor;
-
-        console.log(`[MULTIPLY] ${value} * ${factor} = ${result}`);
 
         return {
           data: { value: result }, // Output as 'value' for next step
@@ -94,8 +87,6 @@ const formatActivity = new McpActivityTool(
       run: async (context) => {
         const { value } = context.input;
         const formatted = `The final result is: ${value.toFixed(2)}`;
-
-        console.log(`[FORMAT] ${formatted}`);
 
         return {
           data: { formatted },
@@ -125,13 +116,22 @@ const calculatorWorkflow = new McpWorkflow(
       },
     ],
     onSuccess: async (memory, sessionId) => {
-      console.log(`[WORKFLOW] Completed successfully!`);
-      console.log(`[WORKFLOW] Session ID: ${sessionId}`);
-      console.log(`[WORKFLOW] Final memory:`, Object.fromEntries(memory));
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[WORKFLOW] Completed successfully! Session ID: ${sessionId}`,
+      });
+      server.sendLoggingMessage({
+        level: "info",
+        data: `[WORKFLOW] Final memory: ${JSON.stringify(
+          Object.fromEntries(memory)
+        )}`,
+      });
     },
     onFailure: async (error, sessionId) => {
-      console.error(`[WORKFLOW] Failed: ${error.message}`);
-      console.error(`[WORKFLOW] Session ID: ${sessionId}`);
+      server.sendLoggingMessage({
+        level: "error",
+        data: `[WORKFLOW] Failed: ${error.message}. Session ID: ${sessionId}`,
+      });
     },
   }
 );

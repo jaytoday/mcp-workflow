@@ -26,6 +26,7 @@ export class McpWorkflow {
   private readonly activities: Map<string, McpActivityTool> = new Map();
   private readonly sessionManager: WorkflowSessionManager;
   private registered: boolean = false;
+  private server: McpServer | null = null;
   private lastSessionId: string | null = null;
 
   constructor(
@@ -50,6 +51,32 @@ export class McpWorkflow {
     if (!this.config.steps || this.config.steps.length === 0) {
       throw new Error("Workflow must have at least one step");
     }
+  }
+
+  /**
+   * Logs an informational message to the server console and sends it to the client.
+   */
+  private _logInfo(message: string): void {
+    if (this.server) {
+      this.server.sendLoggingMessage({
+        level: "info",
+        data: message,
+      });
+    }
+    console.info(message);
+  }
+
+  /**
+   * Logs an error message to the server console and sends it to the client.
+   */
+  private _logError(message: string): void {
+    if (this.server) {
+      this.server.sendLoggingMessage({
+        level: "error",
+        data: message,
+      });
+    }
+    console.error(message);
   }
 
   /**
@@ -91,6 +118,7 @@ export class McpWorkflow {
     }
 
     this.registered = true;
+    this.server = server;
 
     // Register the start tool
     const startToolName = `${this.name}_start`;
@@ -380,27 +408,37 @@ export class McpWorkflow {
       },
     };
 
-    const startedAt = new Date();
-    const result = await activity.execute(context);
-    const completedAt = new Date();
+    this._logInfo(`[${activity.name}] began execution`);
+    const startTime = Date.now();
 
-    await this.sessionManager.recordStepExecution(
-      session.sessionId,
-      stepIndex,
-      activity.name,
-      startedAt,
-      completedAt,
-      result.success ?? true,
-      result.error
-    );
+    try {
+      const result = await activity.execute(context);
+      const duration = Date.now() - startTime;
+      this._logInfo(`[${activity.name}] completed in ${duration}ms`);
 
-    await this.sessionManager.setMemory(
-      session.sessionId,
-      activity.name,
-      result.data
-    );
+      await this.sessionManager.recordStepExecution(
+        session.sessionId,
+        stepIndex,
+        activity.name,
+        new Date(startTime),
+        new Date(),
+        result.success ?? true,
+        result.error
+      );
 
-    return result;
+      await this.sessionManager.setMemory(
+        session.sessionId,
+        activity.name,
+        result.data
+      );
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this._logError(`[${activity.name}] failed with error: ${errorMessage}`);
+      throw error; // Re-throw the error to be caught by the calling method
+    }
   }
 
   /**
