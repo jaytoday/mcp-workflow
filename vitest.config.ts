@@ -8,6 +8,7 @@ export default defineConfig({
       thresholds: {
         functions: 80,
       },
+      exclude: ["examples/*", "*.config.ts", "dist"],
     },
   },
 });
