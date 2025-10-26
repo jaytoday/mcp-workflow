@@ -17,6 +17,8 @@ npm i @p0u4a/mcp-workflow
 - **Error Handling**: Robust error handling with retry logic and optional steps
 - **Conditional Execution**: Skip steps based on runtime conditions
 - **Branching Workflows**: Activities can suggest multiple next steps, allowing for dynamic workflow paths.
+- **Pause and Resume**: Workflows can be paused and resumed at any step.
+- **Cancel**: Workflows can be cancelled at any point, stopping further execution.
 - **Persistent Storage**: Pluggable storage layer for session persistence (default is in-memory).
 - **MCP Integration**: Seamlessly register workflows as MCP tools
 
@@ -79,9 +81,11 @@ The `mcp-workflow` library provides a structured way to define and execute compl
 
 1.  **Define Activities**: Create `McpActivityTool` instances for each step in your process. Each activity encapsulates a specific task, with its own input/output validation, execution logic, and lifecycle callbacks.
 2.  **Define a Workflow**: Create an `McpWorkflow` instance, providing a sequence of steps. Each step references an activity and can have its own configuration, such as input mapping, conditions for execution, and branching logic.
-3.  **Attach to MCP Server**: The `McpWorkflow` instance is attached to your MCP server. This automatically registers two tools:
+3.  **Attach to MCP Server**: The `McpWorkflow` instance is attached to your MCP server. This automatically registers four tools:
     - `{workflow_name}_start`: To begin a new workflow execution.
     - `{workflow_name}_continue`: To proceed to the next step in an ongoing workflow.
+    - `{workflow_name}_pause`: To pause a workflow at its current step.
+    - `{workflow_name}_cancel`: To cancel a workflow and stop its execution.
 4.  **Execution Flow**:
     - An MCP client calls the `_start` tool, which creates a new workflow session and executes the first step.
     - The result of the step, along with suggestions for the next step (if any), is returned to the client.
