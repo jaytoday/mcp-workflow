@@ -110,6 +110,7 @@ export interface ActivityConfig<
 export enum WorkflowStatus {
   PENDING = "pending",
   RUNNING = "running",
+  PAUSED = "paused",
   COMPLETED = "completed",
   FAILED = "failed",
   CANCELLED = "cancelled",

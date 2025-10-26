@@ -1,6 +1,6 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodRawShape } from "zod";
+import { z, ZodRawShape } from "zod";
 import { McpActivityTool } from "./McpActivityTool.js";
 import { WorkflowSessionManager } from "./WorkflowSessionManager.js";
 import {
@@ -144,6 +144,34 @@ export class McpWorkflow {
       this.toMcpContinueToolCallback()
     );
 
+    // Register the cancel tool
+    const cancelToolName = `${this.name}_cancel`;
+    server.registerTool(
+      cancelToolName,
+      {
+        title: `Cancel ${this.name} Workflow`,
+        description: `Cancels the ${this.name} workflow for a given session ID`,
+        inputSchema: {
+          sessionId: z.string(),
+        },
+      },
+      this.toMcpCancelToolCallback()
+    );
+
+    // Register the pause tool
+    const pauseToolName = `${this.name}_pause`;
+    server.registerTool(
+      pauseToolName,
+      {
+        title: `Pause ${this.name} Workflow`,
+        description: `Pauses the ${this.name} workflow for a given session ID`,
+        inputSchema: {
+          sessionId: z.string(),
+        },
+      },
+      this.toMcpPauseToolCallback()
+    );
+
     // Optionally register individual activities as standalone tools
     if (options?.registerActivities) {
       for (const activity of this.activities.values()) {
@@ -211,7 +239,11 @@ export class McpWorkflow {
       throw new Error(`Workflow session ${sessionId} not found`);
     }
 
-    if (session.status !== WorkflowStatus.RUNNING) {
+    if (session.status === WorkflowStatus.PAUSED) {
+      await this.sessionManager.updateSession(sessionId, {
+        status: WorkflowStatus.RUNNING,
+      });
+    } else if (session.status !== WorkflowStatus.RUNNING) {
       throw new Error(`Cannot continue workflow in status: ${session.status}`);
     }
 
@@ -618,6 +650,20 @@ export class McpWorkflow {
   }
 
   /**
+   * Pauses a workflow execution
+   */
+  async pause(sessionId: string): Promise<void> {
+    const session = await this.sessionManager.getSession(sessionId);
+    if (!session) {
+      throw new Error(`Workflow session ${sessionId} not found`);
+    }
+
+    await this.sessionManager.updateSession(sessionId, {
+      status: WorkflowStatus.PAUSED,
+    });
+  }
+
+  /**
    * Gets the current status of a workflow session
    */
   async getSessionStatus(
@@ -644,6 +690,48 @@ export class McpWorkflow {
       // Continue automatically pulls from context, no need for input
       const response = await this.continue();
       return response.toolResult;
+    };
+  }
+
+  /**
+   * Creates an MCP tool callback that cancels the workflow
+   */
+  toMcpCancelToolCallback() {
+    return async ({
+      sessionId,
+    }: {
+      sessionId: string;
+    }): Promise<CallToolResult> => {
+      await this.cancel(sessionId);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Workflow ${this.name} with session ID ${sessionId} has been cancelled.`,
+          },
+        ],
+      };
+    };
+  }
+
+  /**
+   * Creates an MCP tool callback that pauses the workflow
+   */
+  toMcpPauseToolCallback() {
+    return async ({
+      sessionId,
+    }: {
+      sessionId: string;
+    }): Promise<CallToolResult> => {
+      await this.pause(sessionId);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Workflow ${this.name} with session ID ${sessionId} has been paused.`,
+          },
+        ],
+      };
     };
   }
 
